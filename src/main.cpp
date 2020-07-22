@@ -48,52 +48,101 @@ class MyAdvertisedDeviceCallbacks: public BLEAdvertisedDeviceCallbacks {
     if (advertisedDevice.getPayloadLength() == 0) {
       return;
     }
+    // Turn the neopixel on the ATOM Lite blue - this will give a quick flash for the received advertisement and turns off after the message is sent
     leds[0] = CRGB::Blue;
     FastLED.show();
+
+    // Start to build a JSON document object. This expects const char inputs so type conversion may be required. Later stages dont like binary so hexlify as required
     StaticJsonDocument<1024> doc;
+
+    // Capture the time and ESP station from local data
     doc["millis"] = millis();
     doc["station"] = station;
-    std::string address = advertisedDevice.getAddress().toString().c_str();
-    doc["address"] = address;
-    doc["addrtype"] = advertisedDevice.getAddressType();
+
+    // Capture the BLE device address (should be there on all transmisisons)
+    doc["address"] = advertisedDevice.getAddress().toString();
+    // Find the address type - public addresses should stay fixed and uniquely identify the device
+    switch (advertisedDevice.getAddressType())
+    {
+    case esp_ble_addr_type_t::BLE_ADDR_TYPE_PUBLIC:
+      doc["addrtype"]="public";
+      break;
+    case esp_ble_addr_type_t::BLE_ADDR_TYPE_RANDOM:
+      doc["addrtype"]="random";
+      break;
+    case esp_ble_addr_type_t::BLE_ADDR_TYPE_RPA_PUBLIC:
+      doc["addrtype"]="rpa_public";
+      break;
+    case esp_ble_addr_type_t::BLE_ADDR_TYPE_RPA_RANDOM:
+      doc["addrtype"]="rpa_random";
+      break;    
+    default:
+      break;
+    } 
+
+    // Convert the binary payload into hex characters and capture both it and the length. Should be on all transmissions
     doc["payload"] = hexlify(advertisedDevice.getPayload(), advertisedDevice.getPayloadLength());
     doc["payloadlen"] = advertisedDevice.getPayloadLength();
+
+    // The next fields are all optional as decoded
+
+    // Get the RSSI (returns an int)
     if (advertisedDevice.haveRSSI()) {
       doc["rssi"] = advertisedDevice.getRSSI();
     }
+
+    // Get the device name (returns a string) and should be human readable (e.g. for pairing)
     if (advertisedDevice.haveName()) {
       doc["name"] = advertisedDevice.getName();
     }
+
+    // Get the manufacturer data. This returns as a strig but may be binary. Would recommend turning to hex and considering per device in later code
     if (advertisedDevice.haveManufacturerData()) {
-      doc["mfg"] = advertisedDevice.getManufacturerData();
+      doc["mfg"] = hexlify((const uint8_t *)advertisedDevice.getManufacturerData().c_str(),advertisedDevice.getManufacturerData().length());
     }
+
+    // Get the appearance. This is a 16 bit int representing the device icon defined in the bluetooth assigned numbers. 
+    // See http://developer.nordicsemi.com/nRF51_SDK/nRF51_SDK_v5.x.x/doc/5.2.0/html/a01225.html for examples
     if (advertisedDevice.haveAppearance()) {
       doc["appearance"] = advertisedDevice.getAppearance();
     }
+
+    // Get the transmission power of the BLE device. Needed for range finding with RSSI data. 8 bit int.
     if (advertisedDevice.haveTXPower()) {
       doc["txpow"] = advertisedDevice.getTXPower();
     }
+
     /*
+    // Get the service UUID. This is deprecated in the library and replaced with the ServiceData and ServiceDataUUID calls
     if (advertisedDevice.haveServiceUUID()) {
       doc["serviceuuid"] = advertisedDevice.getServiceUUID().toString();
     }
     */
+   
+    // Get any custom service data and UUIDs associated with the data
     if (advertisedDevice.haveServiceData()) {
-      doc["servicedata"] = advertisedDevice.getServiceData();
+      int serviceDataLength = advertisedDevice.getServiceData().length();
+      if (serviceDataLength > 0){
+        doc["servicedata"] = hexlify((const uint8_t *)advertisedDevice.getServiceData().c_str(), serviceDataLength);
+      }
       doc["servicedatauuid"] = advertisedDevice.getServiceDataUUID().toString();
-      Serial.print("Got service!");
     }
+    
     String json;
     serializeJson(doc, json);
+    /*
     if (advertisedDevice.haveServiceData()) {
       Serial.print(json);
     }
-    doc.clear();
+    */
+    doc.clear(); //Clear the document ready for next use and release memory
+
+    // Publish to mqtt server
     if (mqtt.connected()) {
       if (mqtt.publish(mqtt_topic, json.c_str())) {
         publish_ok++;
         last_ok = millis();
-      } else {
+      } else { // We've failed - count a failure and light the LED red
         publish_fail++;
         leds[0] = CRGB::Red;
         FastLED.show();
