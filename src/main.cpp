@@ -121,9 +121,8 @@ class MyAdvertisedDeviceCallbacks: public BLEAdvertisedDeviceCallbacks {
    
     // Get any custom service data and UUIDs associated with the data
     if (advertisedDevice.haveServiceData()) {
-      int serviceDataLength = advertisedDevice.getServiceData().length();
-      if (serviceDataLength > 0){
-        doc["servicedata"] = hexlify((const uint8_t *)advertisedDevice.getServiceData().c_str(), serviceDataLength);
+      if (advertisedDevice.getServiceData().size() > 0){
+        doc["servicedata"] = hexlify((const uint8_t *)advertisedDevice.getServiceData().c_str(), advertisedDevice.getServiceData().size());
       }
       doc["servicedatauuid"] = advertisedDevice.getServiceDataUUID().toString();
     }
