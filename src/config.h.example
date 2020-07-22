@@ -1,5 +1,7 @@
 #define MQTT_HOST "mqtt"
 #define MQTT_PORT 1883
+#define MQTT_USER ""
+#define MQTT_PASSWORD ""
 #define MQTT_TOPIC "ble/received"
 #define WIFI_SSID "MyWifiNetwork"
 #define WIFI_PASSWORD "mypassword"

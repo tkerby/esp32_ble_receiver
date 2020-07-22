@@ -4,12 +4,17 @@
 #include <PubSubClient.h>
 #include <WiFi.h>
 #include <WiFiClient.h>
+#include <FastLED.h>
 
 // provides the PRIx64 macro
 #define __STDC_FORMAT_MACROS
 #include <inttypes.h>
 
 #include "config.h"
+
+#define DATA_PIN 27
+#define NUM_LEDS 1
+CRGB leds[NUM_LEDS];
 
 WiFiClient client;
 PubSubClient mqtt(client);
@@ -43,24 +48,60 @@ class MyAdvertisedDeviceCallbacks: public BLEAdvertisedDeviceCallbacks {
     if (advertisedDevice.getPayloadLength() == 0) {
       return;
     }
-    StaticJsonDocument<512> doc;
+    leds[0] = CRGB::Blue;
+    FastLED.show();
+    StaticJsonDocument<1024> doc;
     doc["millis"] = millis();
     doc["station"] = station;
     std::string address = advertisedDevice.getAddress().toString().c_str();
     doc["address"] = address;
+    doc["addrtype"] = advertisedDevice.getAddressType();
     doc["payload"] = hexlify(advertisedDevice.getPayload(), advertisedDevice.getPayloadLength());
+    doc["payloadlen"] = advertisedDevice.getPayloadLength();
     if (advertisedDevice.haveRSSI()) {
       doc["rssi"] = advertisedDevice.getRSSI();
     }
+    if (advertisedDevice.haveName()) {
+      doc["name"] = advertisedDevice.getName();
+    }
+    if (advertisedDevice.haveManufacturerData()) {
+      doc["mfg"] = advertisedDevice.getManufacturerData();
+    }
+    if (advertisedDevice.haveAppearance()) {
+      doc["appearance"] = advertisedDevice.getAppearance();
+    }
+    if (advertisedDevice.haveTXPower()) {
+      doc["txpow"] = advertisedDevice.getTXPower();
+    }
+    /*
+    if (advertisedDevice.haveServiceUUID()) {
+      doc["serviceuuid"] = advertisedDevice.getServiceUUID().toString();
+    }
+    */
+    if (advertisedDevice.haveServiceData()) {
+      doc["servicedata"] = advertisedDevice.getServiceData();
+      doc["servicedatauuid"] = advertisedDevice.getServiceDataUUID().toString();
+      Serial.print("Got service!");
+    }
     String json;
     serializeJson(doc, json);
+    if (advertisedDevice.haveServiceData()) {
+      Serial.print(json);
+    }
+    doc.clear();
     if (mqtt.connected()) {
       if (mqtt.publish(mqtt_topic, json.c_str())) {
         publish_ok++;
         last_ok = millis();
       } else {
         publish_fail++;
+        leds[0] = CRGB::Red;
+        FastLED.show();
+        delay(20);
       }
+      
+      leds[0] = CRGB::Black;
+      FastLED.show();
     }
   }
 };
@@ -86,11 +127,16 @@ void setup() {
   Serial.print(ESP.getSketchMD5());
   Serial.print(" ");
   Serial.println(clientid);
+  FastLED.addLeds<NEOPIXEL, DATA_PIN>(leds, NUM_LEDS);
+  leds[0] = CRGB::Red;
+  FastLED.show();
 
   WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
   WiFi.setAutoConnect(true);
   WiFi.setAutoReconnect(true);
   WiFi.waitForConnectResult();
+  leds[0] = CRGB::Yellow;
+  FastLED.show();
 
   mqtt.setServer(mqtt_host, mqtt_port);
 
@@ -99,9 +145,15 @@ void setup() {
 
   scanner = BLEDevice::getScan();
   scanner->setAdvertisedDeviceCallbacks(new MyAdvertisedDeviceCallbacks(), true);
-  scanner->setActiveScan(false);
+  scanner->setActiveScan(true); //true gets results quicker but uses more power
   scanner->setInterval(100);
   scanner->setWindow(99);
+  leds[0] = CRGB::Green;
+  FastLED.show();
+  delay(300);
+  leds[0] = CRGB::Black;
+  FastLED.show();
+
 }
 
 void loop() {
@@ -115,7 +167,7 @@ void loop() {
   if (millis() - last_reconnect_check > 1000) {
     if (!mqtt.connected()) {
       Serial.println("reconnecting mqtt");
-      mqtt.connect(clientid);
+      mqtt.connect(clientid, MQTT_USER, MQTT_PASSWORD);
     }
     last_reconnect_check = millis();
   }
