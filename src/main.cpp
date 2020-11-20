@@ -187,9 +187,12 @@ void setup() {
   FastLED.show();
 
   mqtt.setServer(mqtt_host, mqtt_port);
+  mqtt.connect(clientid, MQTT_USER, MQTT_PASSWORD);
 
   BLEDevice::init("");
   station = BLEDevice::getAddress().toString().c_str();
+  Serial.print("Station: ");
+  Serial.println(station);
 
   scanner = BLEDevice::getScan();
   scanner->setAdvertisedDeviceCallbacks(new MyAdvertisedDeviceCallbacks(), true);
@@ -222,7 +225,7 @@ void loop() {
 
   mqtt.loop();
 
-  if (!scanning) {
+  if (!scanning && mqtt.connected()) {
     scanner->start(31, scan_complete, false);
     scanning = true;
   }
