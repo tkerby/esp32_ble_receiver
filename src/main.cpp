@@ -5,6 +5,7 @@
 #include <WiFi.h>
 #include <WiFiClient.h>
 #include <FastLED.h>
+#include <regex>
 
 // provides the PRIx64 macro
 #define __STDC_FORMAT_MACROS
@@ -61,6 +62,13 @@ class MyAdvertisedDeviceCallbacks: public BLEAdvertisedDeviceCallbacks {
 
     // Capture the BLE device address (should be there on all transmisisons)
     doc["address"] = advertisedDevice.getAddress().toString();
+
+    if (USE_REGEX) {
+      std::regex ignore_regex(IGNORE_REGEX);
+      if (std::regex_match(advertisedDevice.getAddress().toString(), ignore_regex)) {
+        return;
+      }
+    }
     // Find the address type - public addresses should stay fixed and uniquely identify the device
     switch (advertisedDevice.getAddressType())
     {

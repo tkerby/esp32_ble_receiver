@@ -6,3 +6,5 @@
 #define WIFI_SSID "MyWifiNetwork"
 #define WIFI_PASSWORD "mypassword"
 #define WATCHDOG_TIMEOUT 180000
+#define USE_REGEX 0
+#define IGNORE_REGEX "(aa:bb:cc|dd:ee:ff).*"
